@@ -112,7 +112,14 @@ class Kalman_filter_cmd_vel_laser():
                 print("publishing", state_message.header.stamp)
 
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
-                    print("finish", self.X_list)
+                    scalar_X_list = []
+                    scalar_P_list = []
+                    for i in range(len(self.X_list)):
+                        scalar_X_list.append(np.asscalar(self.X_list[i]))
+                        scalar_P_list.append(np.asscalar(self.P_list[i]))
+                    print("finished!")
+                    print("X_list", scalar_X_list, "length", len(scalar_X_list))
+                    print("P_list", scalar_P_list, "length", len(scalar_P_list))
                     # TODO plot graph or data accumulation
                     rospy.signal_shutdown("finish!")
 

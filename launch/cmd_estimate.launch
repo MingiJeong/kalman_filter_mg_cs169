@@ -6,7 +6,7 @@
     <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/mingi/Downloads/_2020-01-30-03-49-45.bag"/>
 
     <!-- Main Controller -->
-    <node pkg="kalman_filter_mg_cs169" type="pose_estimate.py" name="main_kalmanfilter" output="screen" />
+    <node pkg="kalman_filter_mg_cs169" type="cmd_estimate.py" name="main_kalmanfilter" output="screen" />
 
     <!-- TF publisher -->
     <node pkg="kalman_filter_mg_cs169" type="tf_publisher.py" name="tf_publisher" />
