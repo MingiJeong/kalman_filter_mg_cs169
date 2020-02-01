@@ -159,6 +159,7 @@ class Kalman_filter_pose_camera():
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
 
+                    # data check on screen
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
                     print("X_time", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))

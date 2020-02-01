@@ -15,7 +15,9 @@ from kalman_calculator import *
 
 INDEX = 0
 MSG_INTERVAL_TIME = 0.5
-CSV_SAVE_PATH = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/cmd_estimate.csv'
+CSV_SAVE_PATH_CMD = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/cmd_estimate.csv'
+CSV_SAVE_PATH_GND = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/ground_measure.csv'
+GROUND_TRUTH_END_MEASURE = 1.1
 # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_cmd_vel_laser():
@@ -32,6 +34,8 @@ class Kalman_filter_cmd_vel_laser():
         self.time_record_scan_now = None
         self.time_record_scan_list = []
         self.time_accumulation_scan_list = []
+        self.ground_truth_time_list = []
+        self.ground_truth_path_list = []
 
         self.rate = rospy.Rate(15)
 
@@ -114,13 +118,25 @@ class Kalman_filter_cmd_vel_laser():
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
+
+                    # TASK 2 -E: path based on ground truth
+                    self.ground_truth_path_list.append(np.asscalar(self.initial_x))
+                    self.ground_truth_path_list.append(GROUND_TRUTH_END_MEASURE)
+                    self.ground_truth_time_list.append(0)
+                    self.ground_truth_time_list.append(self.time_accumulation_scan_list[-1]) # final cmd_vel message
+
+                    # data check on screen
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
                     print("X_time_list", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
                     #print("P_list", scalar_P_list, "length", len(scalar_P_list))
 
+                    print("ground_truth_path_list", self.ground_truth_path_list)
+                    print("ground_truth_time_list", self.ground_truth_time_list)
+
                     # file save function
-                    csv_data_saver(CSV_SAVE_PATH, self.time_accumulation_scan_list, scalar_X_list)
+                    csv_data_saver(CSV_SAVE_PATH_CMD, self.time_accumulation_scan_list, scalar_X_list)
+                    csv_data_saver(CSV_SAVE_PATH_GND, self.ground_truth_time_list, self.ground_truth_path_list)
 
                     rospy.signal_shutdown("finish!")
 
