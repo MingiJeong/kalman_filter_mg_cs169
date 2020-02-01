@@ -12,13 +12,13 @@ from sensor_msgs.msg import LaserScan
 from timeit import default_timer as timer
 from kalman_calculator import *
 
-INDEX = 324
+INDEX = 324 # after analyzing from cmd_estimate_camera.launch for transformed_info_finder node
 MSG_INTERVAL_TIME = 0.5
+CSV_SAVE_PATH = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/pose_estimate_camera.csv'
 # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_pose_camera():
     def __init__(self):
-        # TODO OR record cmd_vel right wait for py?
         self.cmd_subscriber = rospy.Subscriber("cmd_vel", Twist, self.cmd_callback)
         self.pose_subscriber = rospy.Subscriber("pose", PoseStamped, self.pose_callback)
         self.camera_subscriber = rospy.Subscriber("transformed_depth_scan", LaserScan, self.camera_callback)
@@ -35,14 +35,14 @@ class Kalman_filter_pose_camera():
         self.pose_diff_list = []
         self.time_record_scan_now = None
         self.time_record_scan_list = []
+        self.time_accumulation_scan_list = []
         self.first_calculation = False
 
         self.rate = rospy.Rate(15)
 
         self.initial_x = np.array([[0]]) # relative motion's inital position
-        self.initial_P = None
-        # self.initial_P = np.array([[1]]) # bring up from inital_pose.py
-        self.Xp_list = []
+        self.initial_P = None # bring up from inital_pose.py
+
         self.X_list = []
         self.P_list = []
         # self.ground truth
@@ -51,12 +51,11 @@ class Kalman_filter_pose_camera():
     def cmd_callback(self, msg):
         if self.initial_time_record_cmd is not None:
             self.time_record_cmd_now = rospy.get_time()
-            #print("cmd_vel_input", transition, "time", self.time_record_cmd)
 
         # initial time for cmd_vel save
         else:
             self.initial_time_record_cmd = rospy.get_time()
-            # print("cmd_vel_input", self.initial_time_record_cmd)
+            self.time_record_cmd_now = self.initial_time_record_cmd
 
     def pose_callback(self, msg):
         # pose calculation since initial cmd_vel was published
@@ -70,7 +69,6 @@ class Kalman_filter_pose_camera():
                 time_difference = self.time_record_pose_list[-1] - self.time_record_pose_list[-2]
                 dist_for_Xp_calc = math.sqrt((current_msg.pose.position.x - previous_msg.pose.position.x)**2 + (current_msg.pose.position.y - previous_msg.pose.position.y)**2)
                 self.pose_diff_list.append((time_difference, dist_for_Xp_calc))
-                # print("distance calculated", dist_for_Xp_calc)
 
             # first pose msg receives after cmd_vel published
             else:
@@ -94,7 +92,6 @@ class Kalman_filter_pose_camera():
             if len(camera_distance) != 0:
                 front_distance = float(sum(camera_distance) / len(camera_distance))
                 self.time_record_scan_now = rospy.get_time()
-                # print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
                 # after 1st pose msg recieved and dropping scan msg in case of inf (outlier)
                 if len(self.time_record_pose_list) != 0 and front_distance != float("inf"):
@@ -107,18 +104,23 @@ class Kalman_filter_pose_camera():
                     # interpolation
                     transition = time_difference_wrt_scan * (base_distance/base_time_difference)
 
+                    # from second calculation
                     if self.first_calculation == True:
                         x, P = kalman_calculator_pose_camera(transition, front_distance, self.X_list[-1], self.P_list[-1])
                         self.X_list.append(x)
                         self.P_list.append(P)
-                        print("from 2nd kalman", x)
+                        self.time_accumulation_scan_list.append(self.time_accumulation_scan_list[-1] + (self.time_record_scan_list[-1] - self.time_record_scan_list[-2]))
+                        # print("from 2nd kalman", x)
 
+                    # very first calculation
                     else:
                         x, P = kalman_calculator_pose_camera(transition, front_distance, self.initial_x, self.initial_P)
                         self.X_list.append(x)
                         self.P_list.append(P)
-                        print("first kalman", x)
                         self.first_calculation = True
+                        self.time_accumulation_scan_list.append(self.time_record_scan_now - self.initial_time_record_cmd)
+                        # print("first kalman", x)
+
 
                 elif len(self.time_record_pose_list) == 0: # when length 0
                     print("pose not yet received!")
@@ -132,10 +134,7 @@ class Kalman_filter_pose_camera():
 
         while not rospy.is_shutdown():
             # after receiving the first cmd_vel
-            if self.time_record_cmd_now is not None:
-            #if len(self.X_list) != 0:
-                #print("time_record", self.time_record_cmd)
-                # state_message.header.seq =self.initial_pose.header.seq # header seq same as subscribed msg
+            if len(self.X_list) != 0:
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
                 #state_message.pose.pose.position.x = 0
@@ -146,8 +145,7 @@ class Kalman_filter_pose_camera():
                 state_message.pose.pose.orientation.y =0
                 state_message.pose.pose.orientation.z =0
                 state_message.pose.pose.orientation.w =1
-                # state_message.pose.covariance[0] = self.P_list[-1]
-                state_message.pose.covariance[0] = 1
+                state_message.pose.covariance[0] = self.P_list[-1]
 
                 self.state_publisher.publish(state_message)
                 self.rate.sleep()
@@ -156,14 +154,19 @@ class Kalman_filter_pose_camera():
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
                     scalar_X_list = []
                     scalar_P_list = []
+                    # Task 2 - E: path based on pose and camera depth image
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
 
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
-                    print("P_list", scalar_P_list, "length", len(scalar_P_list))
-                    # TODO plot graph or data accumulation
+                    print("X_time", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
+                    # print("P_list", scalar_P_list, "length", len(scalar_P_list))
+
+                    # file save function
+                    csv_data_saver(CSV_SAVE_PATH, self.time_accumulation_scan_list, scalar_X_list)
+
                     rospy.signal_shutdown("finish!")
 
 
@@ -175,7 +178,6 @@ class Kalman_filter_pose_camera():
         self.initial_P = np.array([[self.initial_pose.pose.covariance[0]]])
         print("initial accepted", self.initial_P)
 
-# while shutdown and spin difference question
 
 def main():
     kalman_filter_pose_camera = Kalman_filter_pose_camera()

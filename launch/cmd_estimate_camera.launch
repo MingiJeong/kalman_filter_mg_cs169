@@ -1,11 +1,14 @@
 <launch>
+    <arg name="check_camera" default="false"/>
 
     <!-- rosbag play node -->
     <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/mingi/Downloads/newbag/_2020-02-01-05-50-34.bag"/>
 
+    <!-- converter node for recovering compressed depth image to raw image-->
     <node name="republish" type="republish" pkg="image_transport" output="screen" args="compressed in:=camera/depth/image_raw/
  raw out:=transformed_depth_image" />
 
+    <!-- converter node for changing depth_image to laser_scan -->
     <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan">
       <remap from="camera_info" to="camera/depth/camera_info" />
       <remap from="image" to="transformed_depth_image" />
@@ -15,7 +18,8 @@
       <param name="range_max" value="5.0" /-->
     </node>
 
-    <!-- node pkg="kalman_filter_mg_cs169" type="transformed_info_finder.py" name="tranasform_finder" output="screen"/-->
+    <!-- check camera node for to use information at main estimator -->
+    <node if="$(arg check_camera)" pkg="kalman_filter_mg_cs169" type="transformed_info_finder.py" name="tranasform_finder" output="screen" />
 
     <!-- Main Controller -->
     <node pkg="kalman_filter_mg_cs169" type="cmd_estimate_camera.py" name="main_kalmanfilter" output="screen" />

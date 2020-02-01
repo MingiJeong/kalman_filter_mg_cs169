@@ -5,6 +5,7 @@
 # chmod +x catkin_ws/src/kalman_filter_mg_cs169/scripts/cmd_estimate.py
 
 import rospy
+import csv
 import math
 import numpy as np
 from geometry_msgs.msg import Twist, PoseStamped, PoseWithCovarianceStamped
@@ -14,6 +15,7 @@ from kalman_calculator import *
 
 INDEX = 0
 MSG_INTERVAL_TIME = 0.5
+CSV_SAVE_PATH = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/cmd_estimate.csv'
 # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_cmd_vel_laser():
@@ -22,14 +24,20 @@ class Kalman_filter_cmd_vel_laser():
         self.lidar_subscriber = rospy.Subscriber("scan", LaserScan, self.lidar_callback)
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
         self.transition = None
+
         self.initial_pose = None
         self.initial_time_record_cmd = None # role as an initial time for analysis
+
         self.time_record_cmd_now = None
         self.time_record_scan_now = None
         self.time_record_scan_list = []
+        self.time_accumulation_scan_list = []
+
         self.rate = rospy.Rate(15)
+
         self.initial_x = np.array([[0]]) # relative motion's inital position
         self.initial_P = None # bring up from inital_pose.py
+
         self.X_list = []
         self.P_list = []
         # self.ground truth
@@ -45,14 +53,13 @@ class Kalman_filter_cmd_vel_laser():
             self.transition = msg
             self.initial_time_record_cmd = rospy.get_time()
             self.time_record_cmd_now = self.initial_time_record_cmd
-            #print("cmd_vel_input", transition, "time", self.time_record_cmd)
 
     def lidar_callback(self,msg):
         # under condition that cmd_vel is published after serial bridge is configured in order to calculate based on system model
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
             front_distance = msg.ranges[INDEX]
             self.time_record_scan_now = rospy.get_time()
-            print("lidar_input", front_distance, "time", self.time_record_scan_now)
+            # print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
             # after 2nd measurement of scan msg recieved and dropping scan msg in case of inf (outlier)
             if len(self.time_record_scan_list) != 0 and front_distance != float("inf"):
@@ -62,7 +69,7 @@ class Kalman_filter_cmd_vel_laser():
                 x, P = kalman_calculator_cmd_vel(self.transition, time_difference_wrt_scan, front_distance, self.X_list[-1], self.P_list[-1])
                 self.X_list.append(x)
                 self.P_list.append(P)
-                #self.pose_with_covariance_publisher(x, P)
+                self.time_accumulation_scan_list.append(self.time_accumulation_scan_list[-1] + (self.time_record_scan_list[-1] - self.time_record_scan_list[-2]))
 
             # very first measurement condition and dropping scan msg in case of inf (outlier)
             elif len(self.time_record_scan_list) == 0 and front_distance != float("inf"):
@@ -73,24 +80,17 @@ class Kalman_filter_cmd_vel_laser():
                 x, P = kalman_calculator_cmd_vel(self.transition, time_difference_wrt_scan, front_distance, self.initial_x, self.initial_P)
                 self.X_list.append(x)
                 self.P_list.append(P)
-                #self.pose_with_covariance_publisher(x, P)
+                self.time_accumulation_scan_list.append(self.time_record_scan_now - self.initial_time_record_cmd)
 
-            #print("time_difference_wrt_scan", time_difference_wrt_scan)
-
-            #if self.time_record_scan_now >= self.time_record_cmd_now:
-            #    time_difference_wrt_scan = self.time_record_scan_now - self.time_record_cmd_now
 
     def spin(self):
 
-        # TODO: WRAP state publish function and when calculation finished. publish it
         state_message = PoseWithCovarianceStamped()
         # http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseWithCovariance.html => row major list 6 x 6 matrix
 
         while not rospy.is_shutdown():
             # after receiving the first cmd_vel
             if len(self.X_list) != 0:
-                #print("time_record", self.time_record_cmd)
-                # state_message.header.seq =self.initial_pose.header.seq # header seq same as subscribed msg
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
 
@@ -105,83 +105,25 @@ class Kalman_filter_cmd_vel_laser():
 
                 self.state_publisher.publish(state_message)
                 self.rate.sleep()
-                print("publishing", state_message.header.stamp)
+                # print("publishing", state_message.header.stamp)
 
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
                     scalar_X_list = []
                     scalar_P_list = []
+                    # TASK 2 - B: path based on cmd_vel and scan
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
-                    print("P_list", scalar_P_list, "length", len(scalar_P_list))
-                    # TODO plot graph or data accumulation
+                    print("X_time_list", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
+                    #print("P_list", scalar_P_list, "length", len(scalar_P_list))
+
+                    # file save function
+                    csv_data_saver(CSV_SAVE_PATH, self.time_accumulation_scan_list, scalar_X_list)
+
                     rospy.signal_shutdown("finish!")
 
-
-    '''
-    def pose_with_covariance_publisher(self, state, P):
-        state_message = PoseWithCovarianceStamped()
-        # http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseWithCovariance.html => row major list 6 x 6 matrix
-        row_length = int(math.sqrt(len(state_message.pose.covariance)))
-
-        for i in range(row_length):
-            state_message.pose.covariance[i*row_length+i] = 1
-
-        state_message.header.stamp = rospy.Time.now()
-        state_message.header.frame_id = "odom_kf" # frame id same as subscribed msg
-
-        state_message.pose.pose.position.x = state
-        state_message.pose.pose.position.y = 0
-        state_message.pose.pose.position.z = 0
-        state_message.pose.pose.orientation.x =0
-        state_message.pose.pose.orientation.y =0
-        state_message.pose.pose.orientation.z =0
-        state_message.pose.pose.orientation.w =1
-        state_message.pose.covariance[0] = P
-
-        self.state_publisher.publish(state_message)
-        self.rate.sleep()
-        print("publishing", state_message.header.stamp)
-
-        if rospy.get_time() - self.time_record_cmd_now > 0.6:
-            print("finish", self.X_list)
-            # TODO plot graph or data accumulation
-            rospy.signal_shutdown("finish!")
-
-
-
-
-        def kalman_calculator(self, dt, front_distance, x, P):
-            F = np.eye(1) # relationship between without control
-            B = np.array([[dt]]) # time difference as input above
-            U = np.array([[self.transition.linear.x]]) #veloicty
-
-            H = np.array([[1]])
-
-            Q = np.array([[0.1]])
-            R = np.array([[1]])
-
-            #x = np.array([[1]]) # initial pose TODO: initial state input by user define
-            #P = np.array([[2]])
-
-            # prediction
-            xp = np.dot(F,x) + np.dot(B,U)
-            Pp = np.dot(F, np.dot(P, np.transpose(F))) + Q
-
-            # correction
-            z_modified = np.dot(H, xp) # measure estimation
-            r = (2-front_distance) - z_modified # actual measurement - measure estimation
-            S = np.dot(H, np.dot(Pp, np.transpose(H))) + R
-            K = np.dot(Pp, np.dot(np.transpose(H), np.linalg.inv(S)))
-            x_new = xp + np.dot(K,r)
-            P_new = Pp - np.dot(K, np.dot(H, Pp))
-
-            print("kalman result", x_new, P_new)
-            return (x_new, P_new)
-
-    '''
     # Don't be confuse. initial_P comes from initial_pose.py
     # initial odom position is also saved in self.initial pose; however, initial_x is relative motion of foot frint
     def update_pose_msg(self):
@@ -200,4 +142,3 @@ def main():
 if __name__ =="__main__":
     rospy.init_node("kalman_filter_cmd_vel_and_laser")
     main()
-    #rospy.spin()

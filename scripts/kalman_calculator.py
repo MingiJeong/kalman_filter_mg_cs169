@@ -1,6 +1,14 @@
 import numpy as np
+import csv
 
 INITIAL_DIST_TO_WALL = 2
+
+def csv_data_saver(PATH_N_FILENAME, timelist, datalist):
+    with open(PATH_N_FILENAME, 'w') as file:
+        writer = csv.writer(file)
+        writer.writerows(zip(timelist, datalist))
+        print("csv file saved!")
+
 
 def kalman_calculator_cmd_vel(transition, dt, front_distance, x, P):
     F = np.eye(1) # relationship between state
@@ -37,8 +45,8 @@ def kalman_calculator_cmd_vel_camera(transition, dt, front_distance, x, P):
 
     H = np.array([[1]])
 
-    Q = np.array([[0.1]])
-    R = np.array([[20]])
+    Q = np.array([[3]])
+    R = np.array([[3]])
 
     #x = np.array([[1]]) # initial pose TODO: initial state input by user define
     #P = np.array([[2]])
@@ -94,8 +102,8 @@ def kalman_calculator_pose_camera(transition, front_distance, x, P):
 
     H = np.array([[1]])
 
-    Q = np.array([[0.1]])
-    R = np.array([[100]])
+    Q = np.array([[3]])
+    R = np.array([[3]])
 
     #x = np.array([[1]]) # initial pose TODO: initial state input by user define
     #P = np.array([[2]])

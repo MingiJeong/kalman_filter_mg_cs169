@@ -14,6 +14,7 @@ from kalman_calculator import *
 
 INDEX = 324
 MSG_INTERVAL_TIME = 0.5
+CSV_SAVE_PATH = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/cmd_estimate_camera.csv'
 # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_cmd_vel_camera():
@@ -22,14 +23,20 @@ class Kalman_filter_cmd_vel_camera():
         self.camera_subscriber = rospy.Subscriber("transformed_depth_scan", LaserScan, self.camera_callback)
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
         self.transition = None
+
         self.initial_pose = None
         self.initial_time_record_cmd = None # role as an initial time for analysis
+
         self.time_record_cmd_now = None
         self.time_record_scan_now = None
         self.time_record_scan_list = []
+        self.time_accumulation_scan_list = []
+
         self.rate = rospy.Rate(15)
+
         self.initial_x = np.array([[0]]) # relative motion's inital position
         self.initial_P = None # bring up from inital_pose.py
+
         self.X_list = []
         self.P_list = []
         # self.ground truth
@@ -38,7 +45,6 @@ class Kalman_filter_cmd_vel_camera():
         if self.initial_time_record_cmd is not None:
             self.transition = msg
             self.time_record_cmd_now = rospy.get_time()
-            #print("cmd_vel_input", transition, "time", self.time_record_cmd)
 
         # initial time for cmd_vel save
         else:
@@ -57,7 +63,7 @@ class Kalman_filter_cmd_vel_camera():
             if len(camera_distance) != 0:
                 front_distance = float(sum(camera_distance) / len(camera_distance))
                 self.time_record_scan_now = rospy.get_time()
-                print("camera_input", front_distance, "time", self.time_record_scan_now)
+                # print("camera_input", front_distance, "time", self.time_record_scan_now)
 
                 # after 2nd measurement of scan msg recieved and dropping scan msg in case of inf (outlier)
                 if len(self.time_record_scan_list) != 0 and front_distance != float("inf"):
@@ -67,7 +73,7 @@ class Kalman_filter_cmd_vel_camera():
                     x, P = kalman_calculator_cmd_vel_camera(self.transition, time_difference_wrt_scan, front_distance, self.X_list[-1], self.P_list[-1])
                     self.X_list.append(x)
                     self.P_list.append(P)
-                    #self.pose_with_covariance_publisher(x, P)
+                    self.time_accumulation_scan_list.append(self.time_accumulation_scan_list[-1] + (self.time_record_scan_list[-1] - self.time_record_scan_list[-2]))
 
                 # very first measurement condition and dropping scan msg in case of inf (outlier)
                 elif len(self.time_record_scan_list) == 0 and front_distance != float("inf"):
@@ -78,19 +84,17 @@ class Kalman_filter_cmd_vel_camera():
                     x, P = kalman_calculator_cmd_vel_camera(self.transition, time_difference_wrt_scan, front_distance, self.initial_x, self.initial_P)
                     self.X_list.append(x)
                     self.P_list.append(P)
+                    self.time_accumulation_scan_list.append(self.time_record_scan_now - self.initial_time_record_cmd)
 
 
     def spin(self):
 
-        # TODO: WRAP state publish function and when calculation finished. publish it
         state_message = PoseWithCovarianceStamped()
         # http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseWithCovariance.html => row major list 6 x 6 matrix
 
         while not rospy.is_shutdown():
             # after receiving the first cmd_vel
             if len(self.X_list) != 0:
-                #print("time_record", self.time_record_cmd)
-                # state_message.header.seq =self.initial_pose.header.seq # header seq same as subscribed msg
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
 
@@ -105,18 +109,24 @@ class Kalman_filter_cmd_vel_camera():
 
                 self.state_publisher.publish(state_message)
                 self.rate.sleep()
-                print("publishing", state_message.header.stamp)
+                # print("publishing", state_message.header.stamp)
 
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
                     scalar_X_list = []
                     scalar_P_list = []
+                    # TASK 2 - D: path based on cmd_vel and depth image
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
-                    print("P_list", scalar_P_list, "length", len(scalar_P_list))
+                    print("X_time_list", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
+                    #print("P_list", scalar_P_list, "length", len(scalar_P_list))
                     # TODO plot graph or data accumulation
+
+                    # file save function
+                    csv_data_saver(CSV_SAVE_PATH, self.time_accumulation_scan_list, scalar_X_list)
+
                     rospy.signal_shutdown("finish!")
 
 
@@ -138,4 +148,3 @@ def main():
 if __name__ =="__main__":
     rospy.init_node("kalman_filter_cmd_vel_and_camera")
     main()
-    #rospy.spin()

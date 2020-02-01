@@ -44,8 +44,7 @@ def main():
     #seed(1)
     # random pick generate random numbers [0,10)
     launch_x = np.array([[random() * 10]])
-    # launch_P = np.array([[random() * 10]])
-    launch_P = np.array([[3]])
+    launch_P = np.array([[3]]) # depending on how initial pose is trustworthy
     print("Initialized initial pose x:", launch_x, "initial pose covariance:", launch_P)
 
     initial_pose_msg = PoseWithCovarianceStamped()
@@ -55,6 +54,3 @@ def main():
 if __name__ =="__main__":
     rospy.init_node("initial_pose_node")
     main()
-
-
-# TODO TF is calculated by odom_kf - inital base_foot print
