@@ -2,7 +2,7 @@
 
 # make sure to execute the following lines at the terminal before running this py file
 # source ~/catkin_ws/devel/setup.bash
-# chmod +x catkin_ws/src/kalman_filter_mg_cs169/scripts/pose_estimate.py
+# chmod +x catkin_ws/src/kalman_filter_mg_cs169/scripts/pose_estimate_camera.py
 
 import rospy
 import math
@@ -12,16 +12,16 @@ from sensor_msgs.msg import LaserScan
 from timeit import default_timer as timer
 from kalman_calculator import *
 
-INDEX = 0
+INDEX = 324
 MSG_INTERVAL_TIME = 0.5
 # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
-class Kalman_filter_pose_laser():
+class Kalman_filter_pose_camera():
     def __init__(self):
         # TODO OR record cmd_vel right wait for py?
         self.cmd_subscriber = rospy.Subscriber("cmd_vel", Twist, self.cmd_callback)
         self.pose_subscriber = rospy.Subscriber("pose", PoseStamped, self.pose_callback)
-        self.lidar_subscriber = rospy.Subscriber("scan", LaserScan, self.lidar_callback)
+        self.camera_subscriber = rospy.Subscriber("transformed_depth_scan", LaserScan, self.camera_callback)
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
 
         self.initial_pose = None
@@ -83,39 +83,45 @@ class Kalman_filter_pose_laser():
 
 
     # TODO transition change
-    def lidar_callback(self, msg):
+    def camera_callback(self, msg):
         # under condition that cmd_vel is published after serial bridge is configured in order to calculate based on system model(pose)
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
-            front_distance = msg.ranges[INDEX]
-            self.time_record_scan_now = rospy.get_time()
-            # print("lidar_input", front_distance, "time", self.time_record_scan_now)
+            camera_distance = []
+            for i in range(INDEX-20, INDEX+20):
+                if not math.isnan(msg.ranges[i]):
+                    camera_distance.append((msg.ranges[i]))
 
-            # after 1st pose msg recieved and dropping scan msg in case of inf (outlier)
-            if len(self.time_record_pose_list) != 0 and front_distance != float("inf"):
-                # time difference of scan messages (consecutive ones)
-                self.time_record_scan_list.append(self.time_record_scan_now)
-                time_difference_wrt_scan = self.time_record_scan_now - self.time_record_pose_list[-1]
-                base_time_difference = self.pose_diff_list[-1][0]
-                base_distance = self.pose_diff_list[-1][1]
+            if len(camera_distance) != 0:
+                front_distance = float(sum(camera_distance) / len(camera_distance))
+                self.time_record_scan_now = rospy.get_time()
+                # print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
-                # interpolation
-                transition = time_difference_wrt_scan * (base_distance/base_time_difference)
+                # after 1st pose msg recieved and dropping scan msg in case of inf (outlier)
+                if len(self.time_record_pose_list) != 0 and front_distance != float("inf"):
+                    # time difference of scan messages (consecutive ones)
+                    self.time_record_scan_list.append(self.time_record_scan_now)
+                    time_difference_wrt_scan = self.time_record_scan_now - self.time_record_pose_list[-1]
+                    base_time_difference = self.pose_diff_list[-1][0]
+                    base_distance = self.pose_diff_list[-1][1]
 
-                if self.first_calculation == True:
-                    x, P = kalman_calculator_pose(transition, front_distance, self.X_list[-1], self.P_list[-1])
-                    self.X_list.append(x)
-                    self.P_list.append(P)
-                    print("from 2nd kalman", x)
+                    # interpolation
+                    transition = time_difference_wrt_scan * (base_distance/base_time_difference)
 
-                else:
-                    x, P = kalman_calculator_pose(transition, front_distance, self.initial_x, self.initial_P)
-                    self.X_list.append(x)
-                    self.P_list.append(P)
-                    print("first kalman", x)
-                    self.first_calculation = True
+                    if self.first_calculation == True:
+                        x, P = kalman_calculator_pose_camera(transition, front_distance, self.X_list[-1], self.P_list[-1])
+                        self.X_list.append(x)
+                        self.P_list.append(P)
+                        print("from 2nd kalman", x)
 
-            elif len(self.time_record_pose_list) == 0: # when length 0
-                print("pose not yet received!")
+                    else:
+                        x, P = kalman_calculator_pose_camera(transition, front_distance, self.initial_x, self.initial_P)
+                        self.X_list.append(x)
+                        self.P_list.append(P)
+                        print("first kalman", x)
+                        self.first_calculation = True
+
+                elif len(self.time_record_pose_list) == 0: # when length 0
+                    print("pose not yet received!")
 
 
     def spin(self):
@@ -172,11 +178,11 @@ class Kalman_filter_pose_laser():
 # while shutdown and spin difference question
 
 def main():
-    kalman_filter_pose_laser = Kalman_filter_pose_laser()
-    kalman_filter_pose_laser.update_pose_msg()
-    kalman_filter_pose_laser.spin()
+    kalman_filter_pose_camera = Kalman_filter_pose_camera()
+    kalman_filter_pose_camera.update_pose_msg()
+    kalman_filter_pose_camera.spin()
 
 
 if __name__ =="__main__":
-    rospy.init_node("kalman_filter_pose_and_laser")
+    rospy.init_node("kalman_filter_pose_and_camera")
     main()
