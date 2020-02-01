@@ -2,7 +2,7 @@
 
 # make sure to execute the following lines at the terminal before running this py file
 # source ~/catkin_ws/devel/setup.bash
-# chmod +x catkin_ws/src/kalman_filter_mg_cs169/scripts/pose_estimate.py
+# chmod +x catkin_ws/src/kalman_filter_mg_cs169/scripts/cmd_estimate.py
 
 import rospy
 import math
@@ -10,7 +10,7 @@ import numpy as np
 from geometry_msgs.msg import Twist, PoseStamped, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan
 from timeit import default_timer as timer
-from kalman_calculator_cmd_vel import kalman_calculator_cmd_vel
+from kalman_calculator import *
 
 INDEX = 0
 MSG_INTERVAL_TIME = 0.5
@@ -23,7 +23,7 @@ class Kalman_filter_cmd_vel_laser():
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
         self.transition = None
         self.initial_pose = None
-        self.initial_time_record_cmd = None
+        self.initial_time_record_cmd = None # role as an initial time for analysis
         self.time_record_cmd_now = None
         self.time_record_scan_now = None
         self.time_record_scan_list = []
@@ -33,10 +33,6 @@ class Kalman_filter_cmd_vel_laser():
         self.X_list = []
         self.P_list = []
         # self.ground truth
-
-    # PoseWithCovarianceStamped: header input needed!
-    # TODO: rosbag time syncronization
-    # TODO: Kalman filter computation
 
     def cmd_callback(self, msg):
         if self.initial_time_record_cmd is not None:
@@ -56,9 +52,9 @@ class Kalman_filter_cmd_vel_laser():
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
             front_distance = msg.ranges[INDEX]
             self.time_record_scan_now = rospy.get_time()
-            print("lidar_input", front_distance, type(front_distance), "time", self.time_record_scan_now)
+            print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
-            # dropping scan msg in case of inf (outlier)
+            # after 2nd measurement of scan msg recieved and dropping scan msg in case of inf (outlier)
             if len(self.time_record_scan_list) != 0 and front_distance != float("inf"):
                 # time difference of scan messages (consecutive ones)
                 self.time_record_scan_list.append(self.time_record_scan_now)
