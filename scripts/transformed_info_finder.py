@@ -8,6 +8,8 @@ import rospy
 import math
 from sensor_msgs.msg import LaserScan
 
+# Because the middle index is not exactly middle point for the field of view,
+# We are using this node to check which index is middle.
 class scanner:
     def __init__(self):
         self.receive = None
@@ -25,7 +27,7 @@ class scanner:
             angles.append(angle)
             if abs(angle) < 0.03:
                 answer.append(i)
-        print("answer", answer)
+        print("answer", answer) # middle index for camera
 
 
 def main():

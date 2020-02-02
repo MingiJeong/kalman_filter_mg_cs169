@@ -15,7 +15,6 @@ from kalman_calculator import *
 INDEX = 324 # after analyzing from cmd_estimate_camera.launch for transformed_info_finder node
 MSG_INTERVAL_TIME = 0.5
 CSV_SAVE_PATH = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/pose_estimate_camera.csv'
-# inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_pose_camera():
     def __init__(self):
@@ -24,10 +23,12 @@ class Kalman_filter_pose_camera():
         self.camera_subscriber = rospy.Subscriber("transformed_depth_scan", LaserScan, self.camera_callback)
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
 
+        # initial values saving. The program is calculating based on the first time when cmd_vel is published.
         self.initial_pose = None
         self.initial_time_record_cmd = None # role as an initial time for analysis
         self.initial_time_record_pose = None
 
+        # time saving variables
         self.time_record_cmd_now = None
         self.time_record_pose_now = None
         self.time_record_pose_list = []
@@ -40,15 +41,18 @@ class Kalman_filter_pose_camera():
 
         self.rate = rospy.Rate(15)
 
+        # Even if the task is regarding pose,
+        # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
         self.initial_x = np.array([[0]]) # relative motion's inital position
         self.initial_P = None # bring up from inital_pose.py
 
         self.X_list = []
         self.P_list = []
-        # self.ground truth
 
+    # Even if the task is regarding pose,
     # I keep subscribing to and using cmd_vel as the algorithm is based on the time when 1st cmd and last cmd was published
     def cmd_callback(self, msg):
+        # from 2nd cmd_vel msg
         if self.initial_time_record_cmd is not None:
             self.time_record_cmd_now = rospy.get_time()
 
@@ -80,7 +84,6 @@ class Kalman_filter_pose_camera():
                 self.pose_diff_list.append((time_difference, 0)) # pose still 0
 
 
-    # TODO transition change
     def camera_callback(self, msg):
         # under condition that cmd_vel is published after serial bridge is configured in order to calculate based on system model(pose)
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
@@ -89,6 +92,7 @@ class Kalman_filter_pose_camera():
                 if not math.isnan(msg.ranges[i]):
                     camera_distance.append((msg.ranges[i]))
 
+            # filtering out (outlier when camera_distance NaN)
             if len(camera_distance) != 0:
                 front_distance = float(sum(camera_distance) / len(camera_distance))
                 self.time_record_scan_now = rospy.get_time()
@@ -110,7 +114,6 @@ class Kalman_filter_pose_camera():
                         self.X_list.append(x)
                         self.P_list.append(P)
                         self.time_accumulation_scan_list.append(self.time_accumulation_scan_list[-1] + (self.time_record_scan_list[-1] - self.time_record_scan_list[-2]))
-                        # print("from 2nd kalman", x)
 
                     # very first calculation
                     else:
@@ -119,16 +122,12 @@ class Kalman_filter_pose_camera():
                         self.P_list.append(P)
                         self.first_calculation = True
                         self.time_accumulation_scan_list.append(self.time_record_scan_now - self.initial_time_record_cmd)
-                        # print("first kalman", x)
-
 
                 elif len(self.time_record_pose_list) == 0: # when length 0
                     print("pose not yet received!")
 
 
     def spin(self):
-
-        # TODO: WRAP state publish function and when calculation finished. publish it
         state_message = PoseWithCovarianceStamped()
         # http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseWithCovariance.html => row major list 6 x 6 matrix
 
@@ -137,7 +136,9 @@ class Kalman_filter_pose_camera():
             if len(self.X_list) != 0:
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
-                #state_message.pose.pose.position.x = 0
+                # Based on Task 1's graduate student section, after we receive initialpose randomly,
+                # It is reflected here by making PoseWithCovarianceStamped msg published through the topic "kalman_filter"
+                # This msg is transformed as to base_footprint. You can check it on Rviz
                 state_message.pose.pose.position.x = self.X_list[-1] + self.initial_pose.pose.pose.position.x
                 state_message.pose.pose.position.y = 0
                 state_message.pose.pose.position.z = 0
@@ -149,7 +150,6 @@ class Kalman_filter_pose_camera():
 
                 self.state_publisher.publish(state_message)
                 self.rate.sleep()
-                # print("publishing", state_message.header.stamp)
 
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
                     scalar_X_list = []
@@ -159,7 +159,7 @@ class Kalman_filter_pose_camera():
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
 
-                    # data check on screen
+                    # Data check on screen
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
                     print("X_time", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
@@ -171,8 +171,7 @@ class Kalman_filter_pose_camera():
                     rospy.signal_shutdown("finish!")
 
 
-    # Don't be confuse. initial_P comes from initial_pose.py
-
+    # Don't be confused. initial_P comes from initial_pose.py
     # initial odom position is also saved in self.initial pose; however, initial_x is relative motion of foot frint
     def update_pose_msg(self):
         self.initial_pose = rospy.wait_for_message("initialpose", PoseWithCovarianceStamped)

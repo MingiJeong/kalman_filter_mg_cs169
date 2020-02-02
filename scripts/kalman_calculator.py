@@ -1,8 +1,10 @@
 import numpy as np
 import csv
 
+# starting position's distance to the wall as per PA -1 request
 INITIAL_DIST_TO_WALL = 2
 
+# csv data saving function after all filtering is finished
 def csv_data_saver(PATH_N_FILENAME, timelist, datalist):
     with open(PATH_N_FILENAME, 'w') as file:
         writer = csv.writer(file)
@@ -19,9 +21,6 @@ def kalman_calculator_cmd_vel(transition, dt, front_distance, x, P):
 
     Q = np.array([[0.1]])
     R = np.array([[1]])
-
-    #x = np.array([[1]]) # initial pose TODO: initial state input by user define
-    #P = np.array([[2]])
 
     # prediction
     xp = np.dot(F,x) + np.dot(B,U)
@@ -48,8 +47,6 @@ def kalman_calculator_cmd_vel_camera(transition, dt, front_distance, x, P):
     Q = np.array([[3]])
     R = np.array([[3]])
 
-    #x = np.array([[1]]) # initial pose TODO: initial state input by user define
-    #P = np.array([[2]])
 
     # prediction
     xp = np.dot(F,x) + np.dot(B,U)
@@ -76,8 +73,6 @@ def kalman_calculator_pose(transition, front_distance, x, P):
     Q = np.array([[0.1]])
     R = np.array([[1]])
 
-    #x = np.array([[1]]) # initial pose TODO: initial state input by user define
-    #P = np.array([[2]])
 
     # prediction
     xp = np.dot(F,x) + np.dot(B,U)
@@ -105,8 +100,6 @@ def kalman_calculator_pose_camera(transition, front_distance, x, P):
     Q = np.array([[3]])
     R = np.array([[3]])
 
-    #x = np.array([[1]]) # initial pose TODO: initial state input by user define
-    #P = np.array([[2]])
 
     # prediction
     xp = np.dot(F,x) + np.dot(B,U)

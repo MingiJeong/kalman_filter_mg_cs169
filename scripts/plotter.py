@@ -45,7 +45,7 @@ E_TIME = []
 F_TIME = []
 TIME_LIST = [A_TIME, B_TIME, C_TIME, D_TIME, E_TIME, F_TIME]
 
-# ========== plot path comparison ========== #
+# ========== plot path comparison figure 1 ========== #
 fig = plt.figure()
 for e, path in enumerate(PATH_LIST):
     x = []
@@ -76,7 +76,7 @@ plt.title('Path comparison', fontsize=20)
 
 fig.savefig(PLOT_PATH+'path_compare.pdf')
 
-# ========== plot error comparison ========== #
+# ========== plot error comparison figure 2 ========== #
 
 fig2 = plt.figure()
 for k in range(len(VALUE_LIST)): # F_list is excluded as it is base.

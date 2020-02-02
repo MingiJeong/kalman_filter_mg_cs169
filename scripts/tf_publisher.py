@@ -4,6 +4,7 @@ import rospy
 import tf
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
+# transformation base_footprint wrt odom_kf
 def tf_publisher(msg):
     broadcaster = tf.TransformBroadcaster()
     trans = msg.pose.pose.position

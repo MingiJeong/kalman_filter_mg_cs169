@@ -13,12 +13,13 @@ from sensor_msgs.msg import LaserScan
 from timeit import default_timer as timer
 from kalman_calculator import *
 
-INDEX = 0
-MSG_INTERVAL_TIME = 0.5
+
+INDEX = 0 # LiDAR straightforward index
+MSG_INTERVAL_TIME = 0.5 # time threshold for stopping this node after the last cmd_vel msg
 CSV_SAVE_PATH_CMD = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/cmd_estimate.csv'
 CSV_SAVE_PATH_GND = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/ground_measure.csv'
-GROUND_TRUTH_END_MEASURE = 1.1
-# inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
+GROUND_TRUTH_END_MEASURE = 1.1 # ground truth measure when observation is finished by an user.
+
 
 class Kalman_filter_cmd_vel_laser():
     def __init__(self):
@@ -27,9 +28,11 @@ class Kalman_filter_cmd_vel_laser():
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
         self.transition = None
 
+        # initial values saving. The program is calculating based on the first time when cmd_vel is published.
         self.initial_pose = None
-        self.initial_time_record_cmd = None # role as an initial time for analysis
+        self.initial_time_record_cmd = None
 
+        # time saving variables
         self.time_record_cmd_now = None
         self.time_record_scan_now = None
         self.time_record_scan_list = []
@@ -39,18 +42,18 @@ class Kalman_filter_cmd_vel_laser():
 
         self.rate = rospy.Rate(15)
 
+        # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
         self.initial_x = np.array([[0]]) # relative motion's inital position
         self.initial_P = None # bring up from inital_pose.py
 
         self.X_list = []
         self.P_list = []
-        # self.ground truth
 
     def cmd_callback(self, msg):
+        # from 2nd cmd_vel msg
         if self.initial_time_record_cmd is not None:
             self.transition = msg
             self.time_record_cmd_now = rospy.get_time()
-            #print("cmd_vel_input", transition, "time", self.time_record_cmd)
 
         # initial time for cmd_vel save
         else:
@@ -63,7 +66,6 @@ class Kalman_filter_cmd_vel_laser():
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
             front_distance = msg.ranges[INDEX]
             self.time_record_scan_now = rospy.get_time()
-            # print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
             # after 2nd measurement of scan msg recieved and dropping scan msg in case of inf (outlier)
             if len(self.time_record_scan_list) != 0 and front_distance != float("inf"):
@@ -88,7 +90,6 @@ class Kalman_filter_cmd_vel_laser():
 
 
     def spin(self):
-
         state_message = PoseWithCovarianceStamped()
         # http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseWithCovariance.html => row major list 6 x 6 matrix
 
@@ -98,6 +99,9 @@ class Kalman_filter_cmd_vel_laser():
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
 
+                # Based on Task 1's graduate student section, after we receive initialpose randomly,
+                # It is reflected here by making PoseWithCovarianceStamped msg published through the topic "kalman_filter"
+                # This msg is transformed as to base_footprint. You can check it on Rviz
                 state_message.pose.pose.position.x = self.X_list[-1] + self.initial_pose.pose.pose.position.x
                 state_message.pose.pose.position.y = 0
                 state_message.pose.pose.position.z = 0
@@ -108,12 +112,12 @@ class Kalman_filter_cmd_vel_laser():
                 state_message.pose.covariance[0] = self.P_list[-1]
 
                 self.state_publisher.publish(state_message)
-                self.rate.sleep()
-                # print("publishing", state_message.header.stamp)
+                self.rate.sleep() # publish PoseWithCovarianceStamped msg as per designated Hz
 
                 if rospy.get_time() - self.time_record_cmd_now > MSG_INTERVAL_TIME:
                     scalar_X_list = []
                     scalar_P_list = []
+
                     # TASK 2 - B: path based on cmd_vel and scan
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
@@ -125,7 +129,7 @@ class Kalman_filter_cmd_vel_laser():
                     self.ground_truth_time_list.append(0)
                     self.ground_truth_time_list.append(self.time_accumulation_scan_list[-1]) # final cmd_vel message
 
-                    # data check on screen
+                    # Data check on screen
                     print("finished!")
                     print("X_list", scalar_X_list, "length", len(scalar_X_list))
                     print("X_time_list", self.time_accumulation_scan_list, "length", len(self.time_accumulation_scan_list))
@@ -140,14 +144,13 @@ class Kalman_filter_cmd_vel_laser():
 
                     rospy.signal_shutdown("finish!")
 
-    # Don't be confuse. initial_P comes from initial_pose.py
-    # initial odom position is also saved in self.initial pose; however, initial_x is relative motion of foot frint
+    # Don't be confused. initial_P comes from initial_pose.py
+    # initial odom position is also saved in self.initial pose; however, initial_x is relative motion of foot frint.
     def update_pose_msg(self):
         self.initial_pose = rospy.wait_for_message("initialpose", PoseWithCovarianceStamped)
         self.initial_P = np.array([[self.initial_pose.pose.covariance[0]]])
         print("initial accepted", self.initial_P)
 
-# while shutdown and spin difference question
 
 def main():
     kalman_filter_cmd_vel_laser = Kalman_filter_cmd_vel_laser()

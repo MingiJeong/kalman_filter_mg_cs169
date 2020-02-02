@@ -1,8 +1,9 @@
 <launch>
+    <!-- if you want to check camera info for straightforward, make this true -->
     <arg name="check_camera" default="false"/>
 
     <!-- rosbag play node -->
-    <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/mingi/catkin_ws/bags_2020-02-01-05-50-34.bag"/>
+    <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/mingi/catkin_ws/src/kalman_filter_mg_cs169/bags/_2020-02-01-05-50-34.bag"/>
 
     <!-- converter node for recovering compressed depth image to raw image-->
     <node name="republish" type="republish" pkg="image_transport" output="screen" args="compressed in:=camera/depth/image_raw/
@@ -21,7 +22,7 @@
     <!-- check camera node for to use information at main estimator -->
     <node if="$(arg check_camera)" pkg="kalman_filter_mg_cs169" type="transformed_info_finder.py" name="tranasform_finder" output="screen" />
 
-    <!-- Main Controller -->
+    <!-- Main script -->
     <node pkg="kalman_filter_mg_cs169" type="pose_estimate_camera.py" name="main_kalmanfilter" output="screen" />
 
     <!--TF publisher -->

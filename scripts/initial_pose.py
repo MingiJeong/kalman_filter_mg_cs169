@@ -14,6 +14,7 @@ from random import random
 
 global launch_x, launch_P
 
+# This node will be running until all the filtering nodes (e.g. Task 1 and Task 2 a~f) are finished.
 class Initializer():
     def __init__(self):
         self.pose_publisher = rospy.Publisher("initialpose", PoseWithCovarianceStamped, queue_size=10)
@@ -42,6 +43,7 @@ def main():
     initializer = Initializer()
     # seed random number generator
     #seed(1)
+
     # random pick generate random numbers [0,10)
     launch_x = np.array([[random() * 10]])
     launch_P = np.array([[3]]) # depending on how initial pose is trustworthy

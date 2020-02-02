@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+
+# Caution: I did not use this because of the version error having a message such as "no import yaml"
+# Please use plotter.py on ubuntu command shell. :"python ~path/plotter.py"
 import rospy
 from matplotlib import pyplot as plt
 

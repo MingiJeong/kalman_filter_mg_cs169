@@ -24,9 +24,10 @@ initial pose can be published into different nodes (from different launch files)
 
 1. screen -R core (roscore)
 2. screen -R initializer (rosrun kalman_filter_mg_cs169 initial_pose.py)
-This initializer is essential so that third step can be done.
+This initializer is essential so that the third step can be done.
 
 3. execute a necessary launch file according to topics you want. (roslaunch kalman_filter_mg_cs169 cmd_estimate.launch)
+You will see the calculation in 5 sec (PA-1 I made cmd_vel start delay by ensuring serial connection)
 * For your reference, task 1 can be performed by "cmd_estimate.launch". However, publishing PoseWithCovariance messages and
 tf transformation can be confirmed on other launch files (Only difference is that the same message and topic is based on which data it
 is calculated from.)
@@ -36,3 +37,5 @@ Task 2 - D can be done by "roslaunch kalman_filter_mg_cs169 cmd_estimate_camera.
 Task 2 - E can be done by "roslaunch kalman_filter_mg_cs169 pose_estimate_camera.launch"
 * Task 3 as plotting can be performed on command line "python /home/mingi/catkin_ws/src/kalman_filter_mg_cs169/scripts/plotter.py"
 * plotter_ros.py (plotting through rosrun) was not executable on my laptop due to the version conflict, but I contained it here for the reference.
+
+4. Plot graphs. "python ~/path/plotter.py"

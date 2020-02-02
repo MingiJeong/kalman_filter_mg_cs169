@@ -12,12 +12,11 @@ from sensor_msgs.msg import LaserScan
 from timeit import default_timer as timer
 from kalman_calculator import *
 
-INDEX = 0
-MSG_INTERVAL_TIME = 0.5
+INDEX = 0 # LiDAR straightforward index
+MSG_INTERVAL_TIME = 0.5 # time threshold for stopping this node after the last cmd_vel msg
 CSV_SAVE_PATH_POSE = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/pose.csv'
 CSV_SAVE_PATH_POSE_ESTIMATE = '/home/mingi/catkin_ws/src/kalman_filter_mg_cs169/csv/pose_estimate.csv'
 
-# inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
 
 class Kalman_filter_pose_laser():
     def __init__(self):
@@ -26,10 +25,12 @@ class Kalman_filter_pose_laser():
         self.lidar_subscriber = rospy.Subscriber("scan", LaserScan, self.lidar_callback)
         self.state_publisher = rospy.Publisher("kalman_filter", PoseWithCovarianceStamped, queue_size=10)
 
+        # initial values saving. The program is calculating based on the first time when cmd_vel is published.
         self.initial_pose = None
         self.initial_time_record_cmd = None # role as an initial time for analysis
         self.initial_time_record_pose = None
 
+        # time saving variables
         self.time_record_cmd_now = None
         self.time_record_pose_now = None
         self.time_record_pose_list = []
@@ -42,15 +43,17 @@ class Kalman_filter_pose_laser():
 
         self.rate = rospy.Rate(15)
 
+        # inital state (relative position) and error covariance for Kalman filter (based on robot foot frint)
         self.initial_x = np.array([[0]]) # relative motion's inital position
         self.initial_P = None # bring up from inital_pose.py
 
         self.X_list = []
         self.P_list = []
-        # self.ground truth
 
+    # Even if the task is regarding pose,
     # I keep subscribing to and using cmd_vel as the algorithm is based on the time when 1st cmd and last cmd was published
     def cmd_callback(self, msg):
+        # from 2nd cmd_vel msg
         if self.initial_time_record_cmd is not None:
             self.time_record_cmd_now = rospy.get_time()
 
@@ -71,7 +74,6 @@ class Kalman_filter_pose_laser():
                 time_difference = self.time_record_pose_list[-1] - self.time_record_pose_list[-2]
                 dist_for_Xp_calc = math.sqrt((current_msg.pose.position.x - previous_msg.pose.position.x)**2 + (current_msg.pose.position.y - previous_msg.pose.position.y)**2)
                 self.pose_diff_list.append((time_difference, dist_for_Xp_calc))
-                # print("distance calculated", dist_for_Xp_calc)
 
             # first pose msg receives after cmd_vel published
             else:
@@ -83,13 +85,11 @@ class Kalman_filter_pose_laser():
                 self.pose_diff_list.append((time_difference, 0)) # pose still 0
 
 
-    # TODO transition change
     def lidar_callback(self, msg):
         # under condition that cmd_vel is published after serial bridge is configured in order to calculate based on system model(pose)
         if self.initial_time_record_cmd is not None and rospy.get_time() >= self.initial_time_record_cmd:
             front_distance = msg.ranges[INDEX]
             self.time_record_scan_now = rospy.get_time()
-            # print("lidar_input", front_distance, "time", self.time_record_scan_now)
 
             # after 1st pose msg recieved and dropping scan msg in case of inf (outlier)
             if len(self.time_record_pose_list) != 0 and front_distance != float("inf"):
@@ -132,7 +132,6 @@ class Kalman_filter_pose_laser():
             if len(self.X_list) != 0:
                 state_message.header.stamp = rospy.Time.now()
                 state_message.header.frame_id = "odom_kf"
-                #state_message.pose.pose.position.x = 0
                 state_message.pose.pose.position.x = self.X_list[-1] + self.initial_pose.pose.pose.position.x
                 state_message.pose.pose.position.y = 0
                 state_message.pose.pose.position.z = 0
@@ -150,11 +149,11 @@ class Kalman_filter_pose_laser():
                     pose_path_time = []
                     scalar_X_list = []
                     scalar_P_list = []
+
                     # Task 2 - C: path based on pose and scan
                     for i in range(len(self.X_list)):
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
-
 
                     # Task 2 - A: path based on pose
                     for k in range(len(self.pose_diff_list)):
@@ -178,12 +177,9 @@ class Kalman_filter_pose_laser():
                     csv_data_saver(CSV_SAVE_PATH_POSE, pose_path_time, pose_path_list)
                     csv_data_saver(CSV_SAVE_PATH_POSE_ESTIMATE, self.time_accumulation_scan_list, scalar_X_list)
 
-
                     rospy.signal_shutdown("finish!")
 
-
-    # Don't be confuse. initial_P comes from initial_pose.py
-
+    # Don't be confused. initial_P comes from initial_pose.py
     # initial odom position is also saved in self.initial pose; however, initial_x is relative motion of foot frint
     def update_pose_msg(self):
         self.initial_pose = rospy.wait_for_message("initialpose", PoseWithCovarianceStamped)
