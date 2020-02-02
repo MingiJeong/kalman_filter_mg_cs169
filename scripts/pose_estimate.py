@@ -155,13 +155,6 @@ class Kalman_filter_pose_laser():
                         scalar_X_list.append(np.asscalar(self.X_list[i]))
                         scalar_P_list.append(np.asscalar(self.P_list[i]))
 
-                    '''
-                    # append initial to the front
-                    #https://stackoverflow.com/questions/17911091/append-integer-to-beginning-of-list-in-python
-                    scalar_X_list.insert(0, np.asscalar(self.initial_x))
-                    scalar_P_list.insert(0, np.asscalar(self.initial_P))
-                    self.time_accumulation_scan_list.insert(0, self.initial_time_record_cmd - self.initial_time_record_cmd)
-                    '''
 
                     # Task 2 - A: path based on pose
                     for k in range(len(self.pose_diff_list)):
