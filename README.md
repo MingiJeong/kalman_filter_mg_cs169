@@ -37,5 +37,3 @@ Task 2 - D can be done by "roslaunch kalman_filter_mg_cs169 cmd_estimate_camera.
 Task 2 - E can be done by "roslaunch kalman_filter_mg_cs169 pose_estimate_camera.launch"
 * Task 3 as plotting can be performed on command line "python /home/mingi/catkin_ws/src/kalman_filter_mg_cs169/scripts/plotter.py"
 * plotter_ros.py (plotting through rosrun) was not executable on my laptop due to the version conflict, but I contained it here for the reference.
-
-4. Plot graphs. "python ~/path/plotter.py"
