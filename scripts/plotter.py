@@ -92,7 +92,8 @@ for k in range(len(VALUE_LIST)): # F_list is excluded as it is base.
     else:
         x_val_base = TIME_LIST[5]
         y_val_base = VALUE_LIST[5]
-        x_val_base[1] = 0
+        y_val_base[1] = 0
+	
         plt.scatter(x_val_base, y_val_base, marker=MARKER_STYLE[5], color=COLOR[k], s = 20, label=NAME[5])
 # bbox_inches ='tight'
 plt.xlabel('Time [sec]', fontsize=15)
